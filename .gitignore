@@ -1,0 +1,32 @@
+# Ambiente virtuale
+.venv/
+venv/
+env/
+
+# Variabili d'ambiente / segreti
+.env
+
+# Dataset 
+data/
+
+# Cache Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Checkpoint 
+*.pt
+*.pth
+*.ckpt
+*.h5
+experiments/checkpoints/
+
+# File di sistema
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
