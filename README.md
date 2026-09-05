@@ -92,3 +92,51 @@ inside the null distribution. So the key captures no coherence beyond chance.
 
 The grouping is kept anyway, since merging two patients only costs flexibility while splitting one
 produces leakage, but no claim is made that the validation split is patient-clean on `NORMAL`.
+
+---
+
+## Baselines
+
+Splits after the exclusions above (283 reprocessed files, 32 exact duplicates found by content
+hash). The 16 official validation images are marked `ignore` and left out.
+
+| split | NORMAL | PNEUMONIA | total |
+|---|---|---|---|
+| train | 1,072 | 2,853 | 3,925 |
+| val | 268 | 714 | 982 |
+| test | 231 | 387 | 618 |
+
+### Choosing the metric
+
+Accuracy is useless here, but the usual replacement does not apply either: the rule of thumb says
+to measure the minority class, and the minority class is `NORMAL`, but the clinically critical
+one is `PNEUMONIA`, which is also the majority. Recall on pneumonia would therefore be maximised by
+the degenerate model that predicts pneumonia for everything.
+
+**Balanced accuracy**: the mean of sensitivity and specificity is used instead. The degenerate
+classifier scores exactly 0.500 on every split under it, and unlike macro-F1 it does not depend on
+class prevalence, so validation and test figures stay comparable despite their different balance.
+
+
+### Results
+
+| baseline | validation | test |
+|---|---|---|
+| trivial (always majority class) | 0.500 | 0.500 |
+| logistic regression on metadata, unweighted | 0.791 | 0.756 |
+| logistic regression on metadata, class-weighted | **0.860** | 0.801 |
+
+Run log with confusion matrices in `experiments/runs.csv`.
+
+**86% of the task, on validation, is solvable from acquisition metadata alone: image width, height
+and aspect ratio. Without opening a single image.** That figure is the quantified version of the
+resolution shortcut described above, and it is the context in which every later result has to be
+read.
+
+Two things it does not say. It is not a bar a CNN must clear to prove it learned anatomy: a CNN
+never sees those numbers, since after resizing every image reaches the network with the same shape,
+and the metadata survive only indirectly as resampling sharpness and geometric distortion.
+
+Establishing whether a trained model actually exploits the shortcut needs a separate experiment:
+evaluating it on a subset where the two classes are matched by resolution, so that image size
+carries no information about the label.
