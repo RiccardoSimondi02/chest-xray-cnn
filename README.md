@@ -74,8 +74,10 @@ Full analysis in `notebooks/01_exploration.ipynb`, inventory in `experiments/ima
   shortcut.* Raw data is never modified.
 - **Convert everything to single channel** (correctness, not optimisation: all 283 RGB files are
   grayscale stored in an RGB container, verified channel-by-channel).
-- **Normalise with mean 0.4825 / std 0.2383**, computed on the training split only, as the average
-  of per-image means rather than pooled over pixels.
+- **Normalise with mean 0.5700 / std 0.1791**, computed on the training split after the resize and
+  crop, not on the raw files. Centre-cropping removes the dark borders and raises the mean from 
+  0.4825 to 0.5700, while resizing smooths the image and lowers the standard deviation from 0.2383
+  to 0.1791.
 - **Preserve aspect ratio when resizing** (crop or pad, not a plain squeeze), because aspect ratio
   is class-correlated. Choice between crop and pad still open.
 - **Validation split**: drawn from train only, stratified by class *and grouped by patient*, fixed
@@ -140,3 +142,42 @@ and the metadata survive only indirectly as resampling sharpness and geometric d
 Establishing whether a trained model actually exploits the shortcut needs a separate experiment:
 evaluating it on a subset where the two classes are matched by resolution, so that image size
 carries no information about the label.
+
+---
+
+## Baseline CNN
+
+`src/model.py`, trained by `src/train.py` (hand-written loop, no high-level framework).
+
+Four blocks of `Conv2d(3x3, padding=1) -> ReLU -> MaxPool(2)`, channels 1 → 16 → 32 → 64 → 128,
+then global average pooling and a single `Linear(128, 2)`. Input 224x224, single channel.
+
+**97,410 parameters, of which 99.7% are convolutional.** The classifier head holds 258. Flattening
+the 128×14×14 feature map into a dense layer instead would have meant 3.3M parameters, 97% of them
+in one layer. 224 was chosen because the pretrained backbones used for the final comparison expect
+that size, so the comparison stays direct.
+
+Training: batch size 32, Adam at 1e-3, `CrossEntropyLoss`, 30 epochs, seed 42. Grouped validation
+split, evaluation on validation only.
+
+### Result
+
+**Best validation balanced accuracy: 0.9578 (epoch 28)**, against 0.860 for the metadata-only
+baseline and 0.500 for the trivial one. Per-epoch history in `experiments/history_cnn_baseline.csv`.
+
+### Diagnosis: the expected problem did not occur
+
+|  | epoch 1 | epoch 10 | epoch 20 | epoch 30 |
+|---|---|---|---|---|
+| train loss | 0.503 | 0.180 | 0.135 | 0.092 |
+| val loss | 0.364 | 0.162 | 0.121 | 0.098 |
+
+The two losses fall together and stay within a few thousandths of each other to the end. There is no
+overfitting: the validation loss never turns up, and both curves were still descending when training
+stopped.
+
+That was not the prediction. The standard heuristic, small dataset, no regularisation, thirty
+epochs, expects memorisation. It is a rule about the ratio between model capacity and data, not
+about dataset size, and the capacity had already been removed two decisions earlier: convolutional
+weights are shared across the image and cannot memorise individual examples, and the dense layer
+where overfitting usually originates does not exist in this architecture.

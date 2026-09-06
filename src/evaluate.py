@@ -1,4 +1,5 @@
 from sklearn.metrics import confusion_matrix, balanced_accuracy_score
+from src.config import LABELS
 
 
 def return_balanced_accuracy_score(y_true, y_pred):
@@ -30,6 +31,5 @@ def return_confusion_matrix(y_true, y_pred):
     Returns:
     ndarray: Confusion matrix.
     """
-    labels = ["NORMAL", "PNEUMONIA"]
-    return confusion_matrix(y_true, y_pred, labels=labels)
+    return confusion_matrix(y_true, y_pred, labels=LABELS)
 

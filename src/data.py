@@ -1,4 +1,9 @@
 import pandas as pd
+import torch
+from torchvision import transforms
+from src.config import IMG_SIZE, MEAN, STD, LABELS_INT
+from torch.utils.data import Dataset
+from PIL import Image
 
 def return_split():
     """
@@ -22,3 +27,30 @@ def return_split():
         df[df["split"] == "test"].reset_index(drop=True),
     )
     return df_train, df_val, df_test
+
+
+
+def val_chain():
+    return transforms.Compose([transforms.Grayscale(num_output_channels=1), transforms.Resize(IMG_SIZE), transforms.CenterCrop(IMG_SIZE), 
+                        transforms.ToTensor(), transforms.Normalize(mean=[MEAN], std=[STD])])
+
+def train_chain():
+    return transforms.Compose([transforms.Grayscale(num_output_channels=1), transforms.Resize(IMG_SIZE), transforms.CenterCrop(IMG_SIZE), 
+                        transforms.ToTensor(), transforms.Normalize(mean=[MEAN], std=[STD])])
+
+
+
+class ChestXrayDataset(torch.utils.data.Dataset):
+    def __init__(self, df, chain_func):
+        self.df = df
+        self.transform = chain_func()
+
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, idx):
+        row = self.df.iloc[idx]
+        img = Image.open(row["filepath"])
+        img_transf = self.transform(img)
+        label = LABELS_INT[row["label"]]       
+        return img_transf, label
