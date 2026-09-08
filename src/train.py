@@ -1,37 +1,38 @@
-"""Training loop for the baseline CNN.
+"""Training loop for CNN.
 
-Deliberately minimal: no batch normalisation, no dropout, no augmentation, no
+Fully parameterized. So it can be minimal for baseline: no batch normalisation, no dropout, no augmentation, no
 learning-rate schedule and no early stopping. 
 
 """
-
 import csv
+import os
 import time
 from pathlib import Path
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-from src.config import LABELS_INVERSE, N_EPOCHS
+from src.config import LABELS_INVERSE, N_EPOCHS, SEED, NUM_WORKERS, BATCH_SIZE, LEARNING_RATE, SCHEDULER, AUGMENT
 from src.data import ChestXrayDataset, return_split, train_chain, val_chain
 from src.evaluate import return_balanced_accuracy_score, return_confusion_matrix
 from src.model import Model
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
-RUN_NAME = "cnn_baseline"
-BATCH_SIZE = 32
-LEARNING_RATE = 1e-3
-NUM_WORKERS = 4
-SEED = 42
+
+RUN_NAME = f"cnn_gap_{N_EPOCHS}_{SCHEDULER}_{AUGMENT}_s{SEED}"
 
 HISTORY_CSV = Path("experiments") / f"history_{RUN_NAME}.csv"
 CKPT_DIR = Path("experiments") / "checkpoints"
 
 
 if __name__ == "__main__":
+    # --- check on file history -----------------------------------------------------------
+    if os.path.isfile(HISTORY_CSV): 
+        RUN_NAME = input("Assegna un nome a questa run:")
+        HISTORY_CSV = Path("experiments") / f"history_{RUN_NAME}.csv"
+
 
     # --- device -----------------------------------------------------------
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    if device.type == "cuda":
-        print(f"gpu: {torch.cuda.get_device_name(0)}")
 
     torch.manual_seed(SEED)
 
@@ -54,12 +55,13 @@ if __name__ == "__main__":
         pin_memory=(device.type == "cuda"),
     )
 
-    # --- model, loss, optimiser -------------------------------------------
+    # --- model, loss, optimiser, scheduler -------------------------------------------
     # The model is moved to the device BEFORE the optimiser is built, so that
     # the optimiser holds references to the parameters that are actually used.
     model = Model().to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    scheduler = CosineAnnealingLR(optimizer, T_max=N_EPOCHS) if SCHEDULER == "cosine" else None
 
     n_params = sum(p.numel() for p in model.parameters())
     print(f"run: {RUN_NAME} | parameters: {n_params:,} | epochs: {N_EPOCHS}")
@@ -69,10 +71,11 @@ if __name__ == "__main__":
     HISTORY_CSV.parent.mkdir(parents=True, exist_ok=True)
     with open(HISTORY_CSV, "w", newline="") as f:
         csv.writer(f).writerow(
-            ["epoch", "train_loss", "val_loss", "val_bal_acc", "seconds"]
+            ["epoch", "train_loss", "val_loss", "val_bal_acc", "seconds", "learning rate"]
         )
 
     best_bal_acc = -1.0
+    mean_bal_acc_last_5 = 0.0
 
     # --- epochs -----------------------------------------------------------
     for epoch in range(N_EPOCHS):
@@ -133,8 +136,12 @@ if __name__ == "__main__":
             f" - val_loss: {val_mean_loss:.4f}"
             f" - bal_acc: {bal_acc_score_val:.4f}"
             f" - time: {epoch_time:.2f}s"
+            f"- lr: {optimizer.param_groups[0]['lr']:.2e}"
         )
 
+        if (N_EPOCHS - epoch) <= 5:
+                        mean_bal_acc_last_5 += bal_acc_score_val
+        
         with open(HISTORY_CSV, "a", newline="") as f:
             csv.writer(f).writerow([
                 epoch + 1,
@@ -142,6 +149,7 @@ if __name__ == "__main__":
                 round(val_mean_loss, 6),
                 round(bal_acc_score_val, 6),
                 round(epoch_time, 2),
+                round(optimizer.param_groups[0]["lr"], 8)
             ])
 
         if bal_acc_score_val > best_bal_acc:
@@ -155,10 +163,16 @@ if __name__ == "__main__":
                 },
                 CKPT_DIR / f"{RUN_NAME}_best.pt",
             )
+        
             print(f"    new best ({bal_acc_score_val:.4f}) - checkpoint saved")
+        if scheduler is not None:
+            scheduler.step()   
+            
+        
 
     # --- end of run -------------------------------------------------------
     print(f"\nbest validation balanced accuracy: {best_bal_acc:.4f}")
+    print(f"\nmean validation balanced accuracy of last 5 epochs: {(mean_bal_acc_last_5/5):.4f}")
     print("confusion matrix at the last epoch (rows: true, cols: predicted)")
     print(f"           {'NORMAL':>10} {'PNEUMONIA':>10}")
     for name, row in zip(["NORMAL", "PNEUMONIA"], conf_matrix_val):

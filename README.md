@@ -152,10 +152,13 @@ carries no information about the label.
 Four blocks of `Conv2d(3x3, padding=1) -> ReLU -> MaxPool(2)`, channels 1 → 16 → 32 → 64 → 128,
 then global average pooling and a single `Linear(128, 2)`. Input 224x224, single channel.
 
-**97,410 parameters, of which 99.7% are convolutional.** The classifier head holds 258. Flattening
-the 128×14×14 feature map into a dense layer instead would have meant 3.3M parameters, 97% of them
-in one layer. 224 was chosen because the pretrained backbones used for the final comparison expect
-that size, so the comparison stays direct.
+**97,410 parameters, of which 99.7% are convolutional.** The classifier head contains only 258 
+parameters. Global average pooling removes the spatial dimensions before classification, 
+substantially reducing the number of parameters in the classification head compared with 
+directly flattening the feature map.
+
+Input size 224×224 was chosen because the pretrained backbones used for the final comparison 
+expect that size, keeping the comparison consistent.
 
 Training: batch size 32, Adam at 1e-3, `CrossEntropyLoss`, 30 epochs, seed 42. Grouped validation
 split, evaluation on validation only.
@@ -163,7 +166,7 @@ split, evaluation on validation only.
 ### Result
 
 **Best validation balanced accuracy: 0.9578 (epoch 28)**, against 0.860 for the metadata-only
-baseline and 0.500 for the trivial one. Per-epoch history in `experiments/history_cnn_baseline.csv`.
+baseline and 0.500 for the trivial one. Per-epoch history in `experiments/history_cnn_baseline_gap.csv`.
 
 ### Diagnosis: the expected problem did not occur
 
@@ -177,7 +180,13 @@ overfitting: the validation loss never turns up, and both curves were still desc
 stopped.
 
 That was not the prediction. The standard heuristic, small dataset, no regularisation, thirty
-epochs, expects memorisation. It is a rule about the ratio between model capacity and data, not
-about dataset size, and the capacity had already been removed two decisions earlier: convolutional
-weights are shared across the image and cannot memorise individual examples, and the dense layer
-where overfitting usually originates does not exist in this architecture.
+epochs, expects memorisation. The absence of overfitting is therefore not evidence that the model lacks sufficient capacity to memorise the training set. Rather, the convolutional architecture imposes a strong inductive bias through local connectivity and weight sharing, while global average pooling substantially reduces the dimensionality of the representation passed to the classifier. These choices reduce the model's effective capacity compared with a conventional convolutional network followed by a large fully connected head, but they do not prevent memorisation in principle.
+
+### Controlled comparison: the same network with a dense head
+
+![Training curves: GAP against flatten head](figures/gap_vs_flatten_curves.png)
+
+Swapping global average pooling for flatten + dense (97,410 to 3,308,802 parameters, same seed and
+same pipeline) produces textbook overfitting: training loss reaches 0.0000 by epoch 22, validation
+loss bottoms at epoch 8 and rises from there. Balanced accuracy does not follow,it stays around
+0.97 throughout.

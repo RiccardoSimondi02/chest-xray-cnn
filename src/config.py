@@ -8,4 +8,13 @@ LABELS_INVERSE = {
     1: "PNEUMONIA"
 }
 
-N_EPOCHS = 30
+N_EPOCHS = 80
+BATCH_SIZE = 32
+LEARNING_RATE = 1e-3
+NUM_WORKERS = 4
+SEED = 42
+
+# none, cosine
+SCHEDULER = "none"
+# none, geom_photo
+AUGMENT = "geom_photo"

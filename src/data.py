@@ -1,7 +1,7 @@
 import pandas as pd
 import torch
 from torchvision import transforms
-from src.config import IMG_SIZE, MEAN, STD, LABELS_INT
+from src.config import AUGMENT, IMG_SIZE, MEAN, STD, LABELS_INT
 from torch.utils.data import Dataset
 from PIL import Image
 
@@ -31,12 +31,40 @@ def return_split():
 
 
 def val_chain():
-    return transforms.Compose([transforms.Grayscale(num_output_channels=1), transforms.Resize(IMG_SIZE), transforms.CenterCrop(IMG_SIZE), 
+    return transforms.Compose([transforms.Grayscale(num_output_channels=1), transforms.Resize(IMG_SIZE), transforms.CenterCrop(IMG_SIZE),
                         transforms.ToTensor(), transforms.Normalize(mean=[MEAN], std=[STD])])
 
 def train_chain():
-    return transforms.Compose([transforms.Grayscale(num_output_channels=1), transforms.Resize(IMG_SIZE), transforms.CenterCrop(IMG_SIZE), 
-                        transforms.ToTensor(), transforms.Normalize(mean=[MEAN], std=[STD])])
+    fill_value = round(MEAN * 255)
+
+    transforms_list = [
+        transforms.Grayscale(num_output_channels=1),
+        transforms.Resize(IMG_SIZE),
+        transforms.CenterCrop(IMG_SIZE),
+    ]
+
+    if AUGMENT == "geom_photo":
+        transforms_list.append(
+            transforms.RandomAffine(
+                degrees=7,
+                translate=(0.05, 0.05),
+                scale=(0.9, 1.1),
+                fill=fill_value
+            )
+        )
+        transforms_list.append(
+            transforms.ColorJitter(
+                brightness=0.1,
+                contrast=0.1
+            )
+        )
+
+    transforms_list.extend([
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[MEAN], std=[STD])
+    ])
+
+    return transforms.Compose(transforms_list)
 
 
 
