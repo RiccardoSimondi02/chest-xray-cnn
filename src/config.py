@@ -8,13 +8,30 @@ LABELS_INVERSE = {
     1: "PNEUMONIA"
 }
 
+"""
+
 N_EPOCHS = 80
 BATCH_SIZE = 32
 LEARNING_RATE = 1e-3
 NUM_WORKERS = 4
 SEED = 42
 
-# none, cosine
+# "none" / "cosine"
 SCHEDULER = "none"
-# none, geom_photo
+# "none" / "geom_photo"
 AUGMENT = "geom_photo"
+
+"""
+
+# transfer learning settings
+
+# "cnn" / "resnet18_finetune" / "resnet18_frozen"
+MODEL = "resnet18_finetune"
+
+N_EPOCHS = 20
+BATCH_SIZE = 32
+LEARNING_RATE = 1e-3
+SCHEDULER = "none"
+AUGMENT = "none"
+NUM_WORKERS = 4
+SEED = 42

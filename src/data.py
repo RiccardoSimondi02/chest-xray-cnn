@@ -1,7 +1,7 @@
 import pandas as pd
 import torch
 from torchvision import transforms
-from src.config import AUGMENT, IMG_SIZE, MEAN, STD, LABELS_INT
+from src.config import AUGMENT, IMG_SIZE, MEAN, STD, LABELS_INT, MODEL
 from torch.utils.data import Dataset
 from PIL import Image
 
@@ -30,15 +30,36 @@ def return_split():
 
 
 
+def _model_preprocessing(model_name):
+    """
+    Single source of truth for how a given MODEL wants its input preprocessed:
+    (num_channels, mean, std). train_chain and val_chain both call this, so
+    they can never diverge on channels/normalization for a given backbone.
+    """
+    if model_name in ("resnet18_finetune", "resnet18_frozen"):
+        # pretrained on ImageNet: 3 channels, ImageNet stats
+        return 3, [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
+    # our own CNN, trained from scratch on grayscale chest x-rays
+    return 1, [MEAN], [STD]
+
+
 def val_chain():
-    return transforms.Compose([transforms.Grayscale(num_output_channels=1), transforms.Resize(IMG_SIZE), transforms.CenterCrop(IMG_SIZE),
-                        transforms.ToTensor(), transforms.Normalize(mean=[MEAN], std=[STD])])
+    channels, mean, std = _model_preprocessing(MODEL)
+    return transforms.Compose([
+        transforms.Grayscale(num_output_channels=channels),
+        transforms.Resize(IMG_SIZE),
+        transforms.CenterCrop(IMG_SIZE),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=mean, std=std),
+    ])
+
 
 def train_chain():
+    channels, mean, std = _model_preprocessing(MODEL)
     fill_value = round(MEAN * 255)
 
     transforms_list = [
-        transforms.Grayscale(num_output_channels=1),
+        transforms.Grayscale(num_output_channels=channels),
         transforms.Resize(IMG_SIZE),
         transforms.CenterCrop(IMG_SIZE),
     ]
@@ -59,10 +80,8 @@ def train_chain():
             )
         )
 
-    transforms_list.extend([
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[MEAN], std=[STD])
-    ])
+    transforms_list.append(transforms.ToTensor())
+    transforms_list.append(transforms.Normalize(mean=mean, std=std))
 
     return transforms.Compose(transforms_list)
 

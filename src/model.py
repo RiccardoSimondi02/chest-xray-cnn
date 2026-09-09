@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchvision.models import resnet18, ResNet18_Weights
 
 class Model(nn.Module):
     """
@@ -80,3 +81,13 @@ class ModelLargeHead(nn.Module):
         x = self.linear2(x)
         return x
 
+
+def get_resnet_model(model_type):
+    model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
+    if model_type == "resnet18_frozen":
+        for param in model.parameters():
+            param.requires_grad=False
+
+    model.fc = nn.Linear(model.fc.in_features, 2)
+
+    return model

@@ -11,14 +11,14 @@ from pathlib import Path
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-from src.config import LABELS_INVERSE, N_EPOCHS, SEED, NUM_WORKERS, BATCH_SIZE, LEARNING_RATE, SCHEDULER, AUGMENT
+from src.config import LABELS_INVERSE, N_EPOCHS, SEED, NUM_WORKERS, BATCH_SIZE, LEARNING_RATE, SCHEDULER, AUGMENT, MODEL
 from src.data import ChestXrayDataset, return_split, train_chain, val_chain
 from src.evaluate import return_balanced_accuracy_score, return_confusion_matrix
-from src.model import Model
+from src.model import Model, get_resnet_model
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
 
-RUN_NAME = f"cnn_gap_{N_EPOCHS}_{SCHEDULER}_{AUGMENT}_s{SEED}"
+RUN_NAME = f"cnn_{N_EPOCHS}_{SCHEDULER}_{AUGMENT}_s{SEED}_{MODEL}"
 
 HISTORY_CSV = Path("experiments") / f"history_{RUN_NAME}.csv"
 CKPT_DIR = Path("experiments") / "checkpoints"
@@ -58,13 +58,16 @@ if __name__ == "__main__":
     # --- model, loss, optimiser, scheduler -------------------------------------------
     # The model is moved to the device BEFORE the optimiser is built, so that
     # the optimiser holds references to the parameters that are actually used.
-    model = Model().to(device)
+    if MODEL == "cnn":
+        model = Model().to(device)
+    else:
+         model = get_resnet_model(MODEL).to(device)
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=LEARNING_RATE)
     scheduler = CosineAnnealingLR(optimizer, T_max=N_EPOCHS) if SCHEDULER == "cosine" else None
 
     n_params = sum(p.numel() for p in model.parameters())
-    print(f"run: {RUN_NAME} | parameters: {n_params:,} | epochs: {N_EPOCHS}")
+    print(f"run: {RUN_NAME} | parameters: {n_params:,} | params not freeze "+ str(sum(p.numel() for p in model.parameters() if p.requires_grad)) + "| epochs: {N_EPOCHS}")
 
     # --- run artefacts ----------------------------------------------------
     CKPT_DIR.mkdir(parents=True, exist_ok=True)
